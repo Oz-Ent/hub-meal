@@ -1,8 +1,10 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { doSignInWithEmailAndPassword } from "./auth";
 import { useAuth } from "./authContext";
-import { useState } from "react";
-//import { getFirestore, collection, getDocs } from 'firebase/firestore/lite';
+import React, { useState } from "react";
+import { getFirestore, collection, getDocs } from 'firebase/firestore/lite';
+// import { auth, app} from "./firebase"
+
 const Login = () => {
   // const { userLoggedIn } = useAuth();
 
@@ -10,12 +12,14 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-
+  const navigate=useNavigate();
   const onSubmit = async (e) => {
     e.preventDefault();
     if (!isSigningIn) {
       setIsSigningIn(true);
-      await doSignInWithEmailAndPassword(email, password);
+      await doSignInWithEmailAndPassword(email, password).then(
+        navigate("/sort")
+      )
     }
   };
 
