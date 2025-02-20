@@ -13,13 +13,17 @@ const Login = () => {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const navigate=useNavigate();
+
   const onSubmit = async (e) => {
     e.preventDefault();
     if (!isSigningIn) {
       setIsSigningIn(true);
-      await doSignInWithEmailAndPassword(email, password).then(
+      try {
+        await doSignInWithEmailAndPassword(email, password);
         navigate("/sort")
-      )
+      } catch (error){
+        alert("Incorrect details, try again")
+      }
     }
   };
 

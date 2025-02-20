@@ -17,8 +17,7 @@ const Recover = () => {
 
       )
     }
-    else
-    alert("Please enter new pasword");
+  
   };
 
   return (
@@ -42,44 +41,24 @@ const Recover = () => {
                 className="w-full mt-2 px-3 py-2 text-gray-500 bg-transparent outline-none border focus:border-indigo-600 shadow-sm rounded-lg transition duration-300"
               />
             </div>
-          <div>
-              <label className="text-sm text-gray-600 font-bold">
-               Enter New Password
-              </label>
-              <input
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                }}
-                className="w-full mt-2 px-3 py-2 text-gray-500 bg-transparent outline-none border focus:border-indigo-600 shadow-sm rounded-lg transition duration-300"
-              />
-            </div>
-            <div>
-              <label className="text-sm text-gray-600 font-bold">
-                Confirm Password
-              </label>
-              <input
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => {
-                  setConfirmPassword(e.target.value);
-                }}
-                className="w-full mt-2 px-3 py-2 text-gray-500 bg-transparent outline-none border focus:border-indigo-600 shadow-sm rounded-lg transition duration-300"
-              />
-            </div>
-
             {errorMessage && (
               <span className="text-red-600 font-bold">{errorMessage}</span>
             )}
+            <button
+              type="submit"
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300"
+            >
+              Reset Password
+            </button>
           </form>
-          <p className="text-center text-sm">
+          {/* <p className="text-center text-sm">
             <Link to={"/sort"} className="hover:underline font-bold">
               Reset
+            </Link>
+          </p> */}
+          <p className="text-center text-sm">
+            <Link to="/login" className="hover:underline font-bold">
+              Back to Login
             </Link>
           </p>
         </div>
