@@ -19,8 +19,10 @@ const Login = () => {
     if (!isSigningIn) {
       setIsSigningIn(true);
       try {
-        await doSignInWithEmailAndPassword(email, password);
-        navigate("/sort")
+        const user=await doSignInWithEmailAndPassword(email, password);
+      if(user){
+        console.log("User:",user);
+        navigate("/sort")}
       } catch (error){
         alert("Incorrect details, try again")
       }
