@@ -48,20 +48,21 @@ import Sorter from "./sorter";
 // }
 
 // export default App;
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Recover from "./components/Recover";
+// import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
+
   return (
     <Router>
-      <Routes>
-        <Route path="/" element={<Login />} />
-        <Route path="/recover" element={<Recover />} />
-        <Route path="/sort" element={<Sorter />} />
-      </Routes>
+        <Routes>
+          <Route path="/" element={<Login />} />
+          <Route path="/recover" element={<Recover />} />
+          <Route path="/sort" element={<Sorter />} />
+        </Routes>
     </Router>
   );
 }
 
 export default App;
-

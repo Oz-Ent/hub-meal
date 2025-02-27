@@ -4,6 +4,9 @@ import Papa from "papaparse";
 import DatePicker from "react-datepicker";
 import moment from "moment";
 import "react-datepicker/dist/react-datepicker.css";
+import { signOut } from "firebase/auth";
+import { useNavigate } from "react-router-dom";
+import { auth } from "./components/firebase";
 
 const menus = {
   MenuA: {
@@ -127,7 +130,7 @@ const Sorter = () => {
     moment().subtract(3, "days").toDate()
   );
   const [endDate, setEndDate] = useState(new Date());
-
+  const navigate=useNavigate();
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -247,8 +250,13 @@ const Sorter = () => {
     );
   };
 
+  
+
   return (
     <div>
+      <div>
+        <button onClick={()=>{signOut(auth);navigate('/')}}>Log out</button>
+      </div>
       <h2 className="font-bold text-lg mb-2">Meal Data</h2>
       <div className="flex items-center justify-center gap-3 mb-2">
         <p className="font-semibold">Date:</p>
