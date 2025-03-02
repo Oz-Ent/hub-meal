@@ -1,8 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { doSignInWithEmailAndPassword } from "./auth";
-import { useAuth } from "./authContext";
-import React, { useEffect, useState } from "react";
-import { getFirestore, collection, getDocs } from "firebase/firestore/lite";
+import React, { useState } from "react";
 // import { auth, app} from "./firebase"
 
 const Login = () => {
@@ -14,8 +12,6 @@ const Login = () => {
   const [errorMessage, setErrorMessage] = useState("");
 
   const navigate = useNavigate();
-
-  
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -29,6 +25,8 @@ const Login = () => {
         }
       } catch (error) {
         alert("Incorrect details, try again");
+        setErrorMessage(error.messge);
+        console.log("Error message:", error.messge);
       } finally {
         setIsSigningIn(false);
       }
@@ -37,14 +35,6 @@ const Login = () => {
 
   return (
     <div>
-      {/* {userLoggedIn && <Navigate to={"/sort"} replace={true} />} */}
-      <div>
-        <Link to="/sort">Sorter</Link>
-      </div>
-      <div>
-        <Link to="/recover">Recover</Link>
-      </div>
-
       <main className="w-full h-screen flex self-center place-content-center place-items-center">
         <div className="w-96 text-gray-600 space-y-5 p-4 shadow-xl border rounded-xl">
           <div className="text-center">
