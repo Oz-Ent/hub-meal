@@ -1,19 +1,27 @@
 import "./App.css";
-import Login from "./components/Login";
-import Sorter from "./sorter";
+import Login from "./pages/Login";
+import Sorter from "./pages/Sorter";
 import ProtectedRoute from "./protectedRoute";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import Recover from "./components/Recover";
+import Recover from "./pages/Recover";
+import Users from "./pages/Users";
+import AddUser from "./pages/AddUser";
+import EditUser from "./pages/EditUser";
+import NotFound from "./pages/notFound";
 
 function App() {
   return (
     <Router>
       <Routes>
         <Route element={<ProtectedRoute />}>
-          <Route path="/sort" element={<Sorter />} />
+          <Route path="/" element={<Sorter />} />
+          <Route path="/users" element={<Users />} />
+          <Route path="/adduser" element={<AddUser />} />
+          <Route path="/edituser/:docId" element={<EditUser />} />
         </Route>
-        <Route path="/" element={<Login />} />
+        <Route path="/login" element={<Login />} />
         <Route path="/recover" element={<Recover />} />
+        <Route path="*" element={<NotFound />} /> {/* 404 fallback */}
       </Routes>
     </Router>
   );
