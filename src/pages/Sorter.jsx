@@ -1,12 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import Papa from "papaparse";
 import DatePicker from "react-datepicker";
 import moment from "moment";
 import "react-datepicker/dist/react-datepicker.css";
-import { signOut } from "firebase/auth";
-import { useNavigate } from "react-router-dom";
-import { auth } from "./components/firebase";
+import Header from "../components/header";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "../components/firebase";
 
 const menus = {
   MenuA: {
@@ -92,45 +92,15 @@ const menus = {
     ],
   },
 };
-const staff = [
-  { name: "Abigail" },
-  { name: "Alfred" },
-  { name: "Amma" },
-  { name: "Arnold" },
-  { name: "Barbara" },
-  { name: "Bernard" },
-  { name: "Caleb" },
-  { name: "Calvin" },
-  { name: "Eric" },
-  { name: "Eyram" },
-  { name: "Fritz" },
-  { name: "Glorious" },
-  { name: "Gerald" },
-  { name: "James" },
-  { name: "Jesse" },
-  { name: "Joseph" },
-  { name: "Joshua" },
-  { name: "Julius" },
-  { name: "Justice" },
-  { name: "Kelvin" },
-  { name: "Kwakye" },
-  { name: "Manasseh" },
-  { name: "Martin" },
-  { name: "Michael" },
-  { name: "Mohammed" },
-  { name: "Nii" },
-  { name: "Philip" },
-  { name: "Shelby" },
-  { name: "Sanctify" },
-  { name: "Trudy" },
-];
 const Sorter = () => {
+  const [staffList, setStaffList] = useState([]);
   const [data, setData] = useState([]);
   const [startDate, setStartDate] = useState(
     moment().subtract(3, "days").toDate()
   );
   const [endDate, setEndDate] = useState(new Date());
-  const navigate=useNavigate();
+  const [disabled, SetDisabled] = useState(false);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -160,18 +130,74 @@ const Sorter = () => {
     fetchData();
   }, []);
 
-  const filteredData = data.filter((item) => {
-    const timestamp = moment(item.Timestamp, "DD/MM/YYYY", true);
-    return (
-      timestamp.isValid() &&
-      timestamp.isBetween(startDate, endDate, undefined, "[]")
-    );
-  });
+  const filteredData = useMemo(() => {
+    return data.filter((item) => {
+      const timestamp = moment(item.Timestamp, "DD/MM/YYYY", true);
+      return (
+        timestamp.isValid() &&
+        timestamp.isBetween(startDate, endDate, undefined, "[]")
+      );
+    });
+  }, [data, startDate, endDate]);
 
   const presentStaffNames = filteredData.map((item) => item["I am"]);
-  const missingIndividuals = staff.filter(
-    (member) => !presentStaffNames.includes(member.name)
+  const [missingIndividuals, setMissingIndividuals] = useState([]);
+  useEffect(() => {
+    const fetchStaff = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "users"));
+        const usersData = querySnapshot.docs.map((doc) => ({
+          name: doc.data().firstName,
+        }));
+        const sortedStaffList = usersData.sort((a, b) => {
+          return a.name.localeCompare(b.name);
+        });
+        setStaffList(sortedStaffList);
+      } catch (error) {
+        console.error("Error fetching staff:", error);
+      }
+    };
+
+    fetchStaff();
+  }, []);
+
+  useEffect(() => {
+    const normalizedPresent = filteredData.map((item) =>
+      item["I am"]?.trim().toLowerCase()
+    );
+
+    const missing = staffList.filter((member) => {
+      const staffName = member.name?.trim().toLowerCase();
+      return staffName && !normalizedPresent.includes(staffName);
+    });
+
+    // Avoid setting state if the list hasn't changed
+    setMissingIndividuals((prev) => {
+      const prevNames = prev
+        .map((m) => m.name)
+        .sort()
+        .join(",");
+      const newNames = missing
+        .map((m) => m.name)
+        .sort()
+        .join(",");
+      return prevNames !== newNames ? missing : prev;
+    });
+  }, [filteredData, staffList]);
+
+  console.log("Present Staff Names:", presentStaffNames);
+  console.log(
+    "All Staff Names:",
+    staffList.map((s) => s.name)
   );
+  console.log("missing Individuals", missingIndividuals);
+  const normalizeText = (text) =>
+    text
+      .toUpperCase()
+      .replace(/\s+/g, " ") // Replace multiple spaces with single space
+      .replace(/\u00A0/g, " ") // Replace non-breaking spaces with regular space
+      .replace(/[“”‘’]/g, '"') // Normalize fancy quotes if needed
+      .trim();
 
   const renderTable = (day) => {
     const menuSelections = {};
@@ -186,18 +212,20 @@ const Sorter = () => {
       const selection = item[day] || item[`${day}_1`];
 
       if (selection) {
-        if (menuFoods.includes(selection)) {
-          menuSelections[selection] = (menuSelections[selection] || 0) + 1;
+        const normalizedSelection = normalizeText(selection);
+        const normalizedMenuFoods = menuFoods.map((food) =>
+          normalizeText(food)
+        );
+        if (normalizedMenuFoods.includes(normalizedSelection)) {
+          menuSelections[normalizedSelection] =
+            (menuSelections[normalizedSelection] || 0) + 1;
         } else {
-          if (selection == "UNAVAILABLE") {
-            menuSelections[menuFoods.at(0)] =
-              (menuSelections[menuFoods.at(0)] || 0) + 1;
-            // customSelections[selection] =
-            //   (customSelections[selection] || 0) + 1;
-            // console.log("menufoods", menuFoods.at(1));
-          } else
-            customSelections[selection] =
-              (customSelections[selection] || 0) + 1;
+          if (normalizedSelection === "UNAVAILABLE") {
+            console.log("Unavailable");
+          } else {
+            customSelections[normalizedSelection] =
+              (customSelections[normalizedSelection] || 0) + 1;
+          }
         }
       }
     });
@@ -250,35 +278,53 @@ const Sorter = () => {
     );
   };
 
-  
-
   return (
     <div>
-      <div>
-        <button onClick={()=>{signOut(auth);navigate('/')}}>Log out</button>
+      <div className="">
+        <Header />
       </div>
-      <h2 className="font-bold text-lg mb-2">Meal Data</h2>
-      <div className="flex items-center justify-center gap-3 mb-2">
-        <p className="font-semibold">Date:</p>
-        <DatePicker
-          selected={startDate}
-          onChange={(dates) => {
-            const [start, end] = dates;
-            setStartDate(start);
-            setEndDate(end);
-          }}
-          selectsRange
-          startDate={startDate}
-          endDate={endDate}
-          dateFormat="dd/MM/yyyy"
-          className="border-2 rounded-sm px-2"
-        />
-      </div>
+      {/* <h2 className="font-bold text-lg mb-2">Meal Data</h2> */}
+      <>
+        <div className="flex w-[80vw] flex-row-reverse mt-20 mb-4">
+          <button
+            onClick={() => {
+              // signOut(auth);
+              // navigate("/login");
+              SetDisabled(true);
+            }}
+            className={`${
+              disabled
+                ? "text-gray-400 bg-slate-200 py-2 px-3 rounded-lg"
+                : "bg-slate-300 py-2 px-3 rounded-lg"
+            }`}
+            disabled={disabled}
+          >
+            Export to pdf
+          </button>
+        </div>
+        <div className="flex items-center justify-center gap-3 mb-2 ">
+          <p className="font-semibold ">Date:</p>
+          <DatePicker
+            selected={startDate}
+            onChange={(dates) => {
+              const [start, end] = dates;
+              setStartDate(start);
+              setEndDate(end);
+            }}
+            selectsRange
+            startDate={startDate}
+            endDate={endDate}
+            dateFormat="dd/MM/yyyy"
+            className="border-2 rounded-sm px-2"
+          />
+        </div>
+      </>
       <p className="font-semibold mb-3">
         Number of selections: {filteredData.length}
       </p>
 
-      {missingIndividuals.length > 0 && filteredData.length < 30 && (
+      {missingIndividuals.length > 0 && (
+        // filteredData.length < staffList.length &&
         <div className="bg-red-200 p-2 w-fit mx-auto">
           <h3 className="border-b border-black mb-1">Yet to select</h3>
           <ul>
@@ -297,7 +343,9 @@ const Sorter = () => {
           >
             {day}
           </h3>
-          <div key={day}>{renderTable(day)}</div>
+          <div className="mx-4" key={day}>
+            {renderTable(day)}
+          </div>
         </>
       ))}
       <></>
