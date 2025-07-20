@@ -7,99 +7,23 @@ import "react-datepicker/dist/react-datepicker.css";
 import Header from "../components/header";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../components/firebase";
+import jsPDF from "jspdf";
 
-const menus = {
-  MenuA: {
-    Monday: [
-      "VAMICILIAN RICE WITH CHICKEN STEW",
-      "VAMICILIAN RICE WITH FISH STEW",
-      "SWEET POTATOES WITH CHICKEN (SEASONAL)",
-      "SWEET POTATOES WITH FISH (SEASONAL)",
-      "BEANS STEW WITH RIPE PLANTAIN",
-      "BEANS STEW WITH RICE",
-      "GARDEN EGG STEW WITH YAM",
-    ],
-    Tuesday: [
-      "WAAKYE WITH MEAT",
-      "WAAKYE WITH FISH",
-      "WAAKYE WITH CHICKEN",
-      "BANKU WITH OKRO STEW AND MEAT",
-      "BANKU WITH OKRO STEW AND FISH",
-      "JOLLOF WITH GRILLED CHICKEN",
-      "CLUB SANDWICH",
-    ],
-    Wednesday: [
-      "GARIF)T) WITH CHICKEN",
-      "PALAVA SAUCE WITH RICE",
-      "PALAVA SAUCE WITH RIPE PLANTAIN",
-      "KENKEY WITH FRIED FISH",
-      "KENKEY WITH SAUSAGES",
-      "KENKEY WITH SARDINE AND EGGS",
-      "CABBAGE STEW WITH RICE",
-      "CABBAGE STEW WITH YAM",
-    ],
-    Thursday: [
-      "INDOMIE",
-      "GOAT JOLLOF",
-      "OMOTUO WITH GROUNDNUT SOUP",
-      "EGG STEW WITH RICE",
-      "EGG STEW WITH YAM",
-    ],
-    Friday: [
-      "NOODLES(CHICKEN)",
-      "BANKU WITH GRILLED TILAPIA",
-      "FUFU WITH CHICKEN LIGHT SOUP",
-      "FUFU WITH TILAPIA LIGHT SOUP",
-      "FRIED RICE WITH BEEF SAUCE",
-    ],
-  },
-  MenuB: {
-    Monday: [
-      "JOLLOF WITH GIZZARD AND PLANTAIN",
-      "OMOTUO WITH TURKEY(GROUNDNUT SOUP)",
-      "FRIED YAM WITH CHICKEN",
-      "FRIED YAM WITH FISH",
-      "CHICKEN SALAD",
-      "TUNA SALAD",
-    ],
-    Tuesday: [
-      "RICE WITH TURKEY STEW",
-      "RICE WITH FISH STEW",
-      "FRIEDRICE WITH GRILLED CHICKEN",
-      "FANTE-FANTE AND BANKU",
-      "NOODLES",
-    ],
-    Wednesday: [
-      "ANGUAMU",
-      "AMPESI",
-      "CHICKEN STEW WITH RICE",
-      "FISH STEW WITH RICE",
-      "GOAT JOLLOF",
-    ],
-    Thursday: [
-      "EGG STEW WITH RICE",
-      "TUO ZAAFI",
-      "KENKEY WITH SARDINES AND EGGS",
-      "KENKEY WITH FISH",
-      "KENKEY WITH SAUSAGES AND EGGS",
-      "SANDWICH",
-    ],
-    Friday: [
-      "GARIF)T)",
-      "BANKU WITH GRILLED TILPIA",
-      "FUFU WITH GROUNDNUT SOUP",
-      "SWEET POTATOES WITH CHICKEN",
-    ],
-  },
-};
+// Removed the menus variable
+
 const Sorter = () => {
   const [staffList, setStaffList] = useState([]);
   const [data, setData] = useState([]);
   const [startDate, setStartDate] = useState(
-    moment().subtract(3, "days").toDate()
+    moment().subtract(4, "days").toDate()
   );
   const [endDate, setEndDate] = useState(new Date());
-  const [disabled, SetDisabled] = useState(false);
+  const [disabled, setDisabled] = useState(false);
+  const [popup, setPopup] = useState({
+    open: false,
+    message: "",
+    success: true,
+  });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -199,33 +123,19 @@ const Sorter = () => {
       .replace(/[“”‘’]/g, '"') // Normalize fancy quotes if needed
       .trim();
 
+  // Updated renderTable: all selections are custom
   const renderTable = (day) => {
-    const menuSelections = {};
     const customSelections = {};
 
     filteredData.forEach((item) => {
-      const menuType =
-        item["What menu are you selecting from?"] === "Menu One"
-          ? "MenuA"
-          : "MenuB";
-      const menuFoods = menus[menuType][day] || [];
       const selection = item[day] || item[`${day}_1`];
-
       if (selection) {
         const normalizedSelection = normalizeText(selection);
-        const normalizedMenuFoods = menuFoods.map((food) =>
-          normalizeText(food)
-        );
-        if (normalizedMenuFoods.includes(normalizedSelection)) {
-          menuSelections[normalizedSelection] =
-            (menuSelections[normalizedSelection] || 0) + 1;
+        if (normalizedSelection === "UNAVAILABLE") {
+          console.log("Unavailable");
         } else {
-          if (normalizedSelection === "UNAVAILABLE") {
-            console.log("Unavailable");
-          } else {
-            customSelections[normalizedSelection] =
-              (customSelections[normalizedSelection] || 0) + 1;
-          }
+          customSelections[normalizedSelection] =
+            (customSelections[normalizedSelection] || 0) + 1;
         }
       }
     });
@@ -234,28 +144,11 @@ const Sorter = () => {
       <table className="border w-full">
         <thead>
           <tr>
-            <th className="border">Menu</th>
-            <th className="border">Custom Menu</th>
+            <th className="border">Menu Selection</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td className="border p-2">
-              {Object.entries(menuSelections).map(
-                ([food, count], index, array) => (
-                  <div
-                    key={food}
-                    className={
-                      index !== array.length - 1
-                        ? "border-b border-slate-300 py-1"
-                        : "py-1"
-                    }
-                  >
-                    {count} - {food}
-                  </div>
-                )
-              )}
-            </td>
             <td className="border p-2">
               {Object.entries(customSelections).map(
                 ([food, count], index, array) => (
@@ -278,6 +171,86 @@ const Sorter = () => {
     );
   };
 
+  // PDF Export function
+  const exportToPDF = async () => {
+    setDisabled(true);
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      let y = 20;
+
+      // Dates at top right
+      const dateText = `Date: ${moment(startDate).format(
+        "DD/MM/YYYY"
+      )} - ${moment(endDate).format("DD/MM/YYYY")}`;
+      doc.setFontSize(10);
+      doc.text(dateText, pageWidth - doc.getTextWidth(dateText) - 10, 10);
+
+      // Header
+      doc.setFontSize(18);
+      doc.text("Chosen Menu", pageWidth / 2, y, { align: "center" });
+      y += 10;
+
+      // For each day, print day and menu selections
+      const days = Object.keys(filteredData[0] || {}).filter((day) =>
+        ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].includes(day)
+      );
+      doc.setFontSize(14);
+      days.forEach((day) => {
+        y += 10;
+        doc.text(day, 15, y);
+        y += 6;
+        // Gather selections for this day
+        const customSelections = {};
+        filteredData.forEach((item) => {
+          const selection = item[day] || item[`${day}_1`];
+          if (selection) {
+            const normalizedSelection = normalizeText(selection);
+            if (normalizedSelection !== "UNAVAILABLE") {
+              customSelections[normalizedSelection] =
+                (customSelections[normalizedSelection] || 0) + 1;
+            }
+          }
+        });
+        doc.setFontSize(11);
+        if (Object.keys(customSelections).length === 0) {
+          doc.text("No selections", 20, y);
+          y += 6;
+        } else {
+          Object.entries(customSelections).forEach(([food, count]) => {
+            doc.text(`${count} pack(s) of ${food}`, 20, y);
+            y += 6;
+            if (y > 280) {
+              // Avoid writing off the page
+              doc.addPage();
+              y = 20;
+            }
+          });
+        }
+      });
+      doc.save(
+        `menu_selections_${moment(startDate).format("DDMMMYYYY")}_${moment(
+          endDate
+        ).format("DDMMMYYYY")}.pdf`
+      );
+      setPopup({
+        open: true,
+        message: "PDF downloaded successfully!",
+        success: true,
+      });
+    } catch (error) {
+      console.error("PDF export error:", error);
+      setPopup({
+        open: true,
+        message: "PDF download failed. Please try again.",
+        success: false,
+      });
+    } finally {
+      setDisabled(false);
+      setTimeout(() => setPopup((p) => ({ ...p, open: false })), 4000);
+    }
+  };
+
   return (
     <div>
       <div className="">
@@ -287,11 +260,7 @@ const Sorter = () => {
       <>
         <div className="flex w-[80vw] flex-row-reverse mt-20 mb-4">
           <button
-            onClick={() => {
-              // signOut(auth);
-              // navigate("/login");
-              SetDisabled(true);
-            }}
+            onClick={exportToPDF}
             className={`${
               disabled
                 ? "text-gray-400 bg-slate-200 py-2 px-3 rounded-lg"
@@ -335,20 +304,35 @@ const Sorter = () => {
         </div>
       )}
 
-      {Object.keys(menus.MenuA).map((day) => (
-        <>
-          <h3
-            className="font-semibold mb-2 border-b-2 border-black w-fit mt-6 text-center mx-auto"
-            key={day}
-          >
-            {day}
-          </h3>
-          <div className="mx-4" key={day}>
-            {renderTable(day)}
-          </div>
-        </>
-      ))}
+      {Object.keys(filteredData[0] || {})
+        .filter((day) =>
+          ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].includes(day)
+        )
+        .map((day) => (
+          <>
+            <h3
+              className="font-semibold mb-2 border-b-2 border-black w-fit mt-6 text-center mx-auto"
+              key={day}
+            >
+              {day}
+            </h3>
+            <div className="mx-4" key={day}>
+              {renderTable(day)}
+            </div>
+          </>
+        ))}
       <></>
+      {popup.open && (
+        <div
+          className={`fixed top-8 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded shadow-lg text-white ${
+            popup.success ? "bg-green-300" : "bg-red-300"
+          }`}
+          onClick={() => setPopup((p) => ({ ...p, open: false }))}
+          style={{ cursor: "pointer" }}
+        >
+          {popup.message}
+        </div>
+      )}
     </div>
   );
 };
