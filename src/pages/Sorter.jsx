@@ -134,7 +134,7 @@ const Sorter = () => {
     const customSelections = {};
 
     filteredData.forEach((item) => {
-      const selection = item[day] || item[`${day}_1`];
+      const selection = item[day] || item[`${day}_1`]|| item[`${day}_2`];
       if (selection) {
         const normalizedSelection = normalizeText(selection);
         if (normalizedSelection === "UNAVAILABLE") {
@@ -227,7 +227,7 @@ const Sorter = () => {
         // Gather selections for this day
         const customSelections = {};
         filteredData.forEach((item) => {
-          const selection = item[day] || item[`${day}_1`];
+          const selection = item[day] || item[`${day}_1`]|| item[`${day}_2`];
           if (selection) {
             const normalizedSelection = normalizeText(selection);
             if (normalizedSelection !== "UNAVAILABLE") {
