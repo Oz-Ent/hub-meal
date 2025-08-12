@@ -9,8 +9,6 @@ import { collection, getDocs } from "firebase/firestore";
 import { db } from "../components/firebase";
 import jsPDF from "jspdf";
 
-// Removed the menus variable
-
 const Sorter = () => {
   const [staffList, setStaffList] = useState([]);
   const [data, setData] = useState([]);
@@ -23,6 +21,14 @@ const Sorter = () => {
     open: false,
     message: "",
     success: true,
+  });
+  const [showDaySelection, setShowDaySelection] = useState(false);
+  const [selectedDays, setSelectedDays] = useState({
+    Monday: true,
+    Tuesday: true,
+    Wednesday: true,
+    Thursday: true,
+    Friday: true,
   });
 
   useEffect(() => {
@@ -171,7 +177,24 @@ const Sorter = () => {
     );
   };
 
-  // PDF Export function
+  const handleSelectAll = () => {
+    const allSelected = Object.values(selectedDays).every(
+      (selected) => selected
+    );
+    const newSelection = {};
+    Object.keys(selectedDays).forEach((day) => {
+      newSelection[day] = !allSelected;
+    });
+    setSelectedDays(newSelection);
+  };
+
+  const handleDaySelection = (day) => {
+    setSelectedDays((prev) => ({
+      ...prev,
+      [day]: !prev[day],
+    }));
+  };
+
   const exportToPDF = async () => {
     setDisabled(true);
     try {
@@ -180,9 +203,7 @@ const Sorter = () => {
       let y = 20;
 
       // Dates at top right
-      const dateText = `Date: ${moment(startDate).format(
-        "DD/MM/YYYY"
-      )} - ${moment(endDate).format("DD/MM/YYYY")}`;
+      const dateText = `Date: ${moment().format("DD/MM/YYYY")}`;
       doc.setFontSize(10);
       doc.text(dateText, pageWidth - doc.getTextWidth(dateText) - 10, 10);
 
@@ -191,9 +212,12 @@ const Sorter = () => {
       doc.text("Chosen Menu", pageWidth / 2, y, { align: "center" });
       y += 10;
 
-      // For each day, print day and menu selections
-      const days = Object.keys(filteredData[0] || {}).filter((day) =>
-        ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].includes(day)
+      // For each selected day, print day and menu selections
+      const days = Object.keys(filteredData[0] || {}).filter(
+        (day) =>
+          ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].includes(
+            day
+          ) && selectedDays[day]
       );
       doc.setFontSize(14);
       days.forEach((day) => {
@@ -221,7 +245,6 @@ const Sorter = () => {
             doc.text(`${count} pack(s) of ${food}`, 20, y);
             y += 6;
             if (y > 280) {
-              // Avoid writing off the page
               doc.addPage();
               y = 20;
             }
@@ -238,6 +261,7 @@ const Sorter = () => {
         message: "PDF downloaded successfully!",
         success: true,
       });
+      setShowDaySelection(false);
     } catch (error) {
       console.error("PDF export error:", error);
       setPopup({
@@ -260,13 +284,8 @@ const Sorter = () => {
       <>
         <div className="flex w-[80vw] flex-row-reverse mt-20 mb-4">
           <button
-            onClick={exportToPDF}
-            className={`${
-              disabled
-                ? "text-gray-400 bg-slate-200 py-2 px-3 rounded-lg"
-                : "bg-slate-300 py-2 px-3 rounded-lg"
-            }`}
-            disabled={disabled}
+            onClick={() => setShowDaySelection(true)}
+            className="bg-slate-300 py-2 px-3 rounded-lg hover:bg-slate-400 transition-colors"
           >
             Export to pdf
           </button>
@@ -322,6 +341,68 @@ const Sorter = () => {
           </>
         ))}
       <></>
+      {showDaySelection && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4 text-center">
+              Select Days to Export
+            </h3>
+
+            <div className="space-y-3 mb-6">
+              {Object.keys(selectedDays).map((day) => (
+                <label
+                  key={day}
+                  className="flex items-center space-x-3 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedDays[day]}
+                    onChange={() => handleDaySelection(day)}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-gray-700">{day}</span>
+                </label>
+              ))}
+            </div>
+
+            <div className="flex space-x-3 mb-4">
+              <button
+                onClick={handleSelectAll}
+                className="flex-1 bg-gray-500 text-white py-2 px-4 rounded hover:bg-gray-600 transition-colors"
+              >
+                {Object.values(selectedDays).every((selected) => selected)
+                  ? "Unselect All"
+                  : "Select All"}
+              </button>
+            </div>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowDaySelection(false)}
+                className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded hover:bg-gray-400 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={exportToPDF}
+                disabled={
+                  disabled ||
+                  !Object.values(selectedDays).some((selected) => selected)
+                }
+                className={`flex-1 py-2 px-4 rounded transition-colors ${
+                  disabled ||
+                  !Object.values(selectedDays).some((selected) => selected)
+                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    : "bg-blue-600 text-white hover:bg-blue-700"
+                }`}
+              >
+                {disabled ? "Exporting..." : "Confirm Export"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {popup.open && (
         <div
           className={`fixed top-8 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded shadow-lg text-white ${
