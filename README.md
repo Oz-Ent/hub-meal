@@ -27,3 +27,10 @@ You can use `.env.example` as a template.
 - No secrets in source: Firebase config is loaded from environment variables.
 - Hosting headers enforce CSP, X-Frame-Options, and nosniff. Adjust CSP if adding new third-party origins.
 - Avoid logging sensitive data. Do not store tokens in localStorage; rely on Firebase SDK session handling.
+
+# Deployment
+
+- `npm install -g firebase-tools` to setup tools and environment
+- `firebase login` to login if not already logged in
+- `firebase init hosting` to initialize firebase in the project
+- `firebase deploy` to deploy the app build
