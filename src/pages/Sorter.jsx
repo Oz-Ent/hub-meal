@@ -91,8 +91,55 @@ const Sorter = () => {
     fetchStaff();
   }, []);
 
+  // Deduplicate data by keeping only the most recent entry per person
+  const deduplicatedData = useMemo(() => {
+    const uniquePeople = new Map();
+    
+    filteredData.forEach((item) => {
+      const name = item["I am"]?.trim().toLowerCase();
+      if (name) {
+        const timestamp = moment(item.Timestamp, "DD/MM/YYYY", true);
+        const existing = uniquePeople.get(name);
+        
+        // Keep the most recent timestamp
+        if (!existing) {
+          uniquePeople.set(name, item);
+        } else {
+          const existingTimestamp = existing.rawTimestampObj || moment(existing.Timestamp, "DD/MM/YYYY", true);
+          if (timestamp.isValid() && timestamp.isAfter(existingTimestamp)) {
+            uniquePeople.set(name, { ...item, rawTimestampObj: timestamp });
+          }
+        }
+      }
+    });
+    
+    return Array.from(uniquePeople.values());
+  }, [filteredData]);
+
+  // Detect duplicates
+  const duplicates = useMemo(() => {
+    const nameCount = new Map();
+    
+    filteredData.forEach((item) => {
+      const name = item["I am"]?.trim().toLowerCase();
+      if (name) {
+        nameCount.set(name, (nameCount.get(name) || 0) + 1);
+      }
+    });
+    
+    return Array.from(nameCount.entries())
+      .filter(([_, count]) => count > 1)
+      .map(([name]) => {
+        // Find the original cased name from staff list
+        const staffMember = staffList.find(
+          (s) => s.name?.trim().toLowerCase() === name
+        );
+        return staffMember?.name || name;
+      });
+  }, [filteredData, staffList]);
+
   useEffect(() => {
-    const normalizedPresent = filteredData.map((item) =>
+    const normalizedPresent = deduplicatedData.map((item) =>
       item["I am"]?.trim().toLowerCase()
     );
 
@@ -113,7 +160,7 @@ const Sorter = () => {
         .join(",");
       return prevNames !== newNames ? missing : prev;
     });
-  }, [filteredData, staffList]);
+  }, [deduplicatedData, staffList]);
 
   console.log("Present Staff Names:", presentStaffNames);
   console.log(
@@ -144,15 +191,30 @@ const Sorter = () => {
     return null;
   };
 
-  const renderTable = (day) => {
-    const customSelections = {};
-
-    filteredData.forEach((item) => {
+  const getUnavailableCountForDay = (day) => {
+    let count = 0;
+    deduplicatedData.forEach((item) => {
       const selection = getSelectionForDay(item, day);
       if (selection) {
         const normalizedSelection = normalizeText(selection);
         if (normalizedSelection === "UNAVAILABLE") {
-          console.log("Unavailable");
+          count++;
+        }
+      }
+    });
+    return count;
+  };
+
+  const renderTable = (day) => {
+    const customSelections = {};
+    let unavailableCount = 0;
+
+    deduplicatedData.forEach((item) => {
+      const selection = getSelectionForDay(item, day);
+      if (selection) {
+        const normalizedSelection = normalizeText(selection);
+        if (normalizedSelection === "UNAVAILABLE") {
+          unavailableCount++;
         } else {
           customSelections[normalizedSelection] =
             (customSelections[normalizedSelection] || 0) + 1;
@@ -161,33 +223,51 @@ const Sorter = () => {
     });
 
     return (
-      <table className="border w-full">
-        <thead>
-          <tr>
-            <th className="border">Menu Selection</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td className="border p-2">
-              {Object.entries(customSelections).map(
-                ([food, count], index, array) => (
-                  <div
-                    key={food}
-                    className={
-                      index !== array.length - 1
-                        ? "border-b border-slate-300 py-1"
-                        : "py-1"
-                    }
-                  >
-                    {count} pack(s) of {food}
-                  </div>
-                )
+      <div className="space-y-4">
+        {unavailableCount > 0 && (
+          <div className="bg-gradient-to-r from-red-500/20 to-orange-500/20 border border-red-500/30 rounded-lg p-4">
+            <p className="text-red-300 font-semibold flex items-center gap-2">
+              🚫 Unavailable: <span className="text-lg font-bold">{unavailableCount}</span>
+            </p>
+          </div>
+        )}
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-slate-800/50 border-b border-indigo-500/20">
+                <th className="px-6 py-4 text-left text-sm font-semibold text-cyan-400">
+                  🍽️ Menu Selection
+                </th>
+                <th className="px-6 py-4 text-right text-sm font-semibold text-cyan-400">
+                  Quantity
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-indigo-500/10">
+              {Object.entries(customSelections).length > 0 ? (
+                Object.entries(customSelections).map(([food, count]) => (
+                  <tr key={food} className="hover:bg-slate-800/30 transition duration-200">
+                    <td className="px-6 py-4 text-indigo-100 font-medium">
+                      {food}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <span className="inline-flex items-center justify-center w-8 h-8 bg-gradient-to-r from-cyan-500/30 to-indigo-500/30 border border-cyan-500/50 rounded-full text-cyan-300 font-semibold text-sm">
+                        {count}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="2" className="px-6 py-8 text-center text-indigo-300">
+                    {unavailableCount > 0 ? "No selections besides unavailable" : "No selections for this day"}
+                  </td>
+                </tr>
               )}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+            </tbody>
+          </table>
+        </div>
+      </div>
     );
   };
 
@@ -227,7 +307,7 @@ const Sorter = () => {
       y += 10;
 
       // For each selected day, print day and menu selections
-      const days = Object.keys(filteredData[0] || {}).filter(
+      const days = Object.keys(deduplicatedData[0] || {}).filter(
         (day) =>
           ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].includes(
             day
@@ -240,7 +320,7 @@ const Sorter = () => {
         y += 6;
         // Gather selections for this day
         const customSelections = {};
-        filteredData.forEach((item) => {
+        deduplicatedData.forEach((item) => {
           const selection = getSelectionForDay(item, day);
           if (selection) {
             const normalizedSelection = normalizeText(selection);
@@ -290,99 +370,165 @@ const Sorter = () => {
   };
 
   return (
-    <div>
-      <div className="">
-        <Header />
-      </div>
-      {/* <h2 className="font-bold text-lg mb-2">Meal Data</h2> */}
-      <>
-        <div className="flex w-[80vw] flex-row-reverse mt-20 mb-4">
-          <button
-            onClick={() => setShowDaySelection(true)}
-            className="bg-slate-300 py-2 px-3 rounded-lg hover:bg-slate-400 transition-colors"
-          >
-            Export to pdf
-          </button>
-        </div>
-        <div className="flex items-center justify-center gap-3 mb-2 ">
-          <p className="font-semibold ">Date:</p>
-          <DatePicker
-            selected={startDate}
-            onChange={(dates) => {
-              const [start, end] = dates;
-              setStartDate(start);
-              setEndDate(end);
-            }}
-            selectsRange
-            startDate={startDate}
-            endDate={endDate}
-            dateFormat="dd/MM/yyyy"
-            className="border-2 rounded-sm px-2"
-          />
-        </div>
-      </>
-      <p className="font-semibold mb-3">
-        Number of selections: {filteredData.length}
-      </p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-black text-white">
+      <Header />
+      
+      <div className="pt-20 px-4 pb-10">
+        <div className="max-w-6xl mx-auto">
+          {/* Header */}
+          <div className="mb-12">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-cyan-400 to-indigo-300 bg-clip-text text-transparent mb-2">
+              Meal Selection Dashboard
+            </h1>
+            <p className="text-indigo-200">View meal selections and export reports</p>
+          </div>
 
-      {missingIndividuals.length > 0 && (
-        // filteredData.length < staffList.length &&
-        <div className="bg-red-200 p-2 w-fit mx-auto">
-          <h3 className="border-b border-black mb-1">Yet to select</h3>
-          <ul>
-            {missingIndividuals.map((member) => (
-              <li key={member.name}>{member.name}</li>
-            ))}
-          </ul>
-        </div>
-      )}
+          {/* Controls */}
+          <div className="bg-slate-900/50 border border-indigo-500/20 rounded-2xl p-6 mb-8 backdrop-blur-sm relative z-20">
+            <div className="flex flex-col lg:flex-row gap-6 items-end">
+              {/* Date Picker */}
+              <div className="flex-1 relative z-20">
+                <label className="block text-sm font-semibold text-indigo-200 mb-2">
+                  Select Date Range:
+                </label>
+                <DatePicker
+                  selected={startDate}
+                  onChange={(dates) => {
+                    const [start, end] = dates;
+                    setStartDate(start);
+                    setEndDate(end);
+                  }}
+                  selectsRange
+                  startDate={startDate}
+                  endDate={endDate}
+                  dateFormat="dd/MM/yyyy"
+                  className="w-full px-4 py-2 rounded-lg border border-indigo-500/30 bg-slate-900/50 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition duration-200"
+                  portalClassName="relative z-50"
+                />
+              </div>
 
-      {Object.keys(filteredData[0] || {})
-        .filter((day) =>
-          ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].includes(day)
-        )
-        .map((day) => (
-          <>
-            <h3
-              className="font-semibold mb-2 border-b-2 border-black w-fit mt-6 text-center mx-auto"
-              key={day}
-            >
-              {day}
-            </h3>
-            <div className="mx-4" key={day}>
-              {renderTable(day)}
+              {/* Export Button */}
+              <button
+                onClick={() => setShowDaySelection(true)}
+                className="px-8 py-2 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 rounded-lg font-semibold transition duration-200 active:scale-95 shadow-lg hover:shadow-cyan-500/50"
+              >
+                📄 Export to PDF
+              </button>
             </div>
-          </>
-        ))}
-      <></>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div className="bg-gradient-to-br from-cyan-500/20 to-indigo-500/20 border border-cyan-500/30 rounded-lg p-6 backdrop-blur-sm">
+              <p className="text-indigo-200 text-sm mb-1">Total Selections (Unique)</p>
+              <p className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-indigo-300 bg-clip-text text-transparent">
+                {deduplicatedData.length}
+              </p>
+            </div>
+            <div className="bg-gradient-to-br from-yellow-500/20 to-amber-500/20 border border-yellow-500/30 rounded-lg p-6 backdrop-blur-sm">
+              <p className="text-indigo-200 text-sm mb-1">Duplicate Entries</p>
+              <p className="text-3xl font-bold bg-gradient-to-r from-yellow-400 to-amber-400 bg-clip-text text-transparent">
+                {duplicates.length}
+              </p>
+            </div>
+            <div className="bg-gradient-to-br from-orange-500/20 to-red-500/20 border border-orange-500/30 rounded-lg p-6 backdrop-blur-sm">
+              <p className="text-indigo-200 text-sm mb-1">Pending Selections</p>
+              <p className="text-3xl font-bold bg-gradient-to-r from-orange-400 to-red-400 bg-clip-text text-transparent">
+                {missingIndividuals.length}
+              </p>
+            </div>
+          </div>
+
+          {/* Missing Individuals */}
+          {missingIndividuals.length > 0 && (
+            <div className="bg-gradient-to-br from-red-500/20 to-orange-500/20 border border-red-500/30 rounded-2xl p-6 mb-8 backdrop-blur-sm">
+              <h3 className="text-lg font-semibold text-red-300 mb-4 flex items-center gap-2">
+                ⚠️ Staff Awaiting Selection ({missingIndividuals.length})
+              </h3>
+              <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                {missingIndividuals.map((member) => (
+                  <li
+                    key={member.name}
+                    className="px-4 py-2 bg-slate-900/50 border border-red-500/20 rounded-lg text-red-200 text-sm"
+                  >
+                    {member.name}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Duplicates Section */}
+          {duplicates.length > 0 && (
+            <div className="bg-gradient-to-br from-yellow-500/20 to-amber-500/20 border border-yellow-500/30 rounded-2xl p-6 mb-8 backdrop-blur-sm">
+              <h3 className="text-lg font-semibold text-yellow-300 mb-4 flex items-center gap-2">
+                🔄 Duplicate Entries ({duplicates.length})
+              </h3>
+              <p className="text-yellow-200/70 text-sm mb-4">
+                The following staff members have multiple entries in the selected date range. Most recent selection is used.
+              </p>
+              <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                {duplicates.map((name) => (
+                  <li
+                    key={name}
+                    className="px-4 py-2 bg-slate-900/50 border border-yellow-500/20 rounded-lg text-yellow-200 text-sm"
+                  >
+                    {name}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Meal Selection by Day */}
+          <div className="space-y-8">
+            {Object.keys(deduplicatedData[0] || filteredData[0] || {})
+              .filter((day) =>
+                ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].includes(day)
+              )
+              .map((day) => (
+                <div key={day}>
+                  <h3 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-indigo-300 bg-clip-text text-transparent mb-4">
+                    📅 {day}
+                  </h3>
+                  <div className="bg-slate-900/50 border border-indigo-500/20 rounded-2xl overflow-hidden backdrop-blur-sm">
+                    {renderTable(day)}
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Day Selection Modal */}
       {showDaySelection && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4 text-center">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-indigo-500/30 rounded-2xl p-8 max-w-md w-full shadow-2xl">
+            <h3 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-indigo-300 bg-clip-text text-transparent mb-6 text-center">
               Select Days to Export
             </h3>
 
-            <div className="space-y-3 mb-6">
+            <div className="space-y-3 mb-8">
               {Object.keys(selectedDays).map((day) => (
                 <label
                   key={day}
-                  className="flex items-center space-x-3 cursor-pointer"
+                  className="flex items-center space-x-3 cursor-pointer px-4 py-2 rounded-lg hover:bg-slate-800/50 transition"
                 >
                   <input
                     type="checkbox"
                     checked={selectedDays[day]}
                     onChange={() => handleDaySelection(day)}
-                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                    className="w-4 h-4 rounded border-indigo-500 bg-slate-900 cursor-pointer"
                   />
-                  <span className="text-gray-700">{day}</span>
+                  <span className="text-indigo-200 font-medium">{day}</span>
                 </label>
               ))}
             </div>
 
-            <div className="flex space-x-3 mb-4">
+            <div className="flex space-x-3 mb-6">
               <button
                 onClick={handleSelectAll}
-                className="flex-1 bg-gray-500 text-white py-2 px-4 rounded hover:bg-gray-600 transition-colors"
+                className="flex-1 py-2 px-4 rounded-lg bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-semibold transition duration-200"
               >
                 {Object.values(selectedDays).every((selected) => selected)
                   ? "Unselect All"
@@ -393,7 +539,7 @@ const Sorter = () => {
             <div className="flex space-x-3">
               <button
                 onClick={() => setShowDaySelection(false)}
-                className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded hover:bg-gray-400 transition-colors"
+                className="flex-1 py-2 px-4 rounded-lg bg-slate-700 hover:bg-slate-600 text-white font-semibold transition duration-200"
               >
                 Cancel
               </button>
@@ -403,11 +549,11 @@ const Sorter = () => {
                   disabled ||
                   !Object.values(selectedDays).some((selected) => selected)
                 }
-                className={`flex-1 py-2 px-4 rounded transition-colors ${
+                className={`flex-1 py-2 px-4 rounded-lg font-semibold transition duration-200 ${
                   disabled ||
                   !Object.values(selectedDays).some((selected) => selected)
-                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                    : "bg-blue-600 text-white hover:bg-blue-700"
+                    ? "bg-slate-600 text-slate-400 cursor-not-allowed"
+                    : "bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white active:scale-95"
                 }`}
               >
                 {disabled ? "Exporting..." : "Confirm Export"}
@@ -417,15 +563,17 @@ const Sorter = () => {
         </div>
       )}
 
+      {/* Success/Error Popup */}
       {popup.open && (
         <div
-          className={`fixed top-8 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded shadow-lg text-white ${
-            popup.success ? "bg-green-300" : "bg-red-300"
+          className={`fixed top-8 left-1/2 transform -translate-x-1/2 z-50 px-6 py-4 rounded-lg shadow-2xl text-white font-semibold cursor-pointer transition duration-300 ${
+            popup.success
+              ? "bg-gradient-to-r from-green-500 to-emerald-500"
+              : "bg-gradient-to-r from-red-500 to-orange-500"
           }`}
           onClick={() => setPopup((p) => ({ ...p, open: false }))}
-          style={{ cursor: "pointer" }}
         >
-          {popup.message}
+          {popup.success ? "✓" : "✕"} {popup.message}
         </div>
       )}
     </div>
