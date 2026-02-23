@@ -7,7 +7,7 @@ import Recover from "./pages/Recover";
 import Users from "./pages/Users";
 import AddUser from "./pages/AddUser";
 import EditUser from "./pages/EditUser";
-import NotFound from "./pages/notFound";
+import NotFound from "./pages/NotFound";
 
 function App() {
   return (
